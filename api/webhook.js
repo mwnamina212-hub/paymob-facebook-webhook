@@ -1,33 +1,39 @@
-// استيراد مكتبة لإرسال الطلبات إلى فيسبوك
-const fetch = require('node-fetch');
+// Webhook function to send Purchase event to Facebook Conversion API
+// This version is cleaned and optimized for Vercel's Node.js 18+ environment.
 
-// هذه هي الدالة الرئيسية التي ستستقبل الطلب من Paymob
 module.exports = async (req, res) => {
-  // التأكد من أن الطلب هو POST
+  // 1. Allow only POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
   }
 
   try {
-    // 1. استلام البيانات من Paymob
-    const paymobData = req.body;
-    const transaction = paymobData.obj;
+    let paymobData = req.body;
 
-    // تحقق من أن العملية ناجحة وأن البيانات موجودة
-    if (!transaction || !transaction.success) {
-      console.log('Transaction not successful or data missing, skipping.');
-      return res.status(200).json({ message: 'Transaction not successful or data missing, skipping.' });
+    // 2. Safety Check: Parse body if it's a string (as suggested)
+    if (typeof paymobData === 'string') {
+      try {
+        paymobData = JSON.parse(paymobData);
+      } catch (e) {
+        console.error('Failed to parse request body:', e);
+        return res.status(400).json({ message: 'Invalid JSON format.' });
+      }
     }
 
-    // ==================================================
-    // === البيانات الخاصة بك (لا تحتاج لتغييرها) ===
-    // ==================================================
+    const transaction = paymobData.obj;
+
+    // 3. Check if transaction was successful
+    if (!transaction || !transaction.success) {
+      console.log('Webhook received, but transaction was not successful. Skipping.');
+      return res.status(200).json({ message: 'Transaction not successful.' });
+    }
+
+    // 4. Your Facebook & Landing Page Details
     const PIXEL_ID = '1506403623938656';
     const ACCESS_TOKEN = 'EAAYJ1TdZCSU8BPlqqJ4P42xOABysm8m72kaDZCsip3SI0lyE49hWKc1XwDq63ssbiIOrwGIyrF9lUBZBAqctWZCRCB4zCa2g3j8f9Hrf5njkhhZBxCRrcCvnATz0ZC0d1nfvVwMjmIWoD4BKqgMm4i3LdTYLAZC6ODH2SNdppijiEfNZCKa4O4olqHwnTjFXyQZDZD';
     const YOUR_LANDING_PAGE = 'https://www.sportivaacademy.online/sales';
-    // ==================================================
 
-    // 2. تجهيز البيانات لإرسالها إلى فيسبوك
+    // 5. Prepare the event payload for Facebook
     const eventData = {
       data: [
         {
@@ -45,29 +51,26 @@ module.exports = async (req, res) => {
           },
         },
       ],
-      // لا تضع التوكن هنا في النسخة النهائية، استخدم متغيرات البيئة
-      // access_token: ACCESS_TOKEN, 
     };
 
     const FB_API_URL = https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN};
 
-    // 3. إرسال البيانات إلى Facebook Conversion API
+    // 6. Send data using the built-in fetch in Vercel
     const response = await fetch(FB_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(eventData),
     });
-        
+
     const responseBody = await response.json();
-    console.log('Facebook API Response:', responseBody);
+    console.log('Successfully sent event to Facebook. Response:', responseBody);
 
-
-    // 4. إرسال رد ناجح إلى Paymob
-    res.status(200).json({ status: 'success' });
+    // 7. Always respond to Paymob with a success status
+    res.status(200).json({ status: 'success', facebook_response: responseBody });
 
   } catch (error) {
-    console.error('Server Error:', error);
-    // أرسل رد 200 حتى لا يظن Paymob أن الـ webhook فشل
+    console.error('A critical error occurred in the webhook function:', error);
+    // Still respond with 200 so Paymob doesn't keep retrying and block your webhook
     res.status(200).json({ status: 'error', message: error.message });
   }
 };
