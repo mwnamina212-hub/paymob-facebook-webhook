@@ -28,6 +28,7 @@ module.exports = async (req, res) => {
     const ACCESS_TOKEN = 'EAAYJ1TdZCSU8BPlqqJ4P42xOABysm8m72kaDZCsip3SI0lyE49hWKc1XwDq63ssbiIOrwGIyrF9lUBZBAqctWZCRCB4zCa2g3j8f9Hrf5njkhhZBxCRrcCvnATz0ZC0d1nfvVwMjmIWoD4BKqgMm4i3LdTYLAZC6ODH2SNdppijiEfNZCKa4O4olqHwnTjFXyQZDZD';
     const YOUR_LANDING_PAGE = 'https://www.sportivaacademy.online/sales';
 
+    // =================== THIS IS THE CORRECTED PART ===================
     const eventData = {
       data: [
         {
@@ -35,9 +36,10 @@ module.exports = async (req, res) => {
           event_time: Math.floor(Date.now() / 1000),
           event_source_url: YOUR_LANDING_PAGE,
           action_source: 'website',
+          // This block is now safe and checks if billing_data exists
           user_data: {
-            em: [transaction.billing_data.email].filter(Boolean),
-            ph: [transaction.billing_data.phone_number].filter(Boolean),
+            em: transaction.billing_data ? [transaction.billing_data.email].filter(Boolean) : [],
+            ph: transaction.billing_data ? [transaction.billing_data.phone_number].filter(Boolean) : [],
           },
           custom_data: {
             currency: transaction.currency,
@@ -46,8 +48,9 @@ module.exports = async (req, res) => {
         },
       ],
     };
+    // =================================================================
 
-    const FB_API_URL = `https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`;
+    const FB_API_URL = https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN};
 
     const response = await fetch(FB_API_URL, {
       method: 'POST',
