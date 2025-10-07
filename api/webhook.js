@@ -1,4 +1,16 @@
+// webhook.js
 const fetch = require('node-fetch');
+const crypto = require('crypto');
+
+function sha256Lower(str) {
+  return crypto.createHash('sha256').update(String(str).trim().toLowerCase()).digest('hex');
+}
+
+function normalizePhone(phone) {
+  if (!phone) return '';
+  // Keep digits only (FB recommends removing non-digits)
+  return String(phone).replace(/\D/g, '');
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -17,16 +29,38 @@ module.exports = async (req, res) => {
       }
     }
 
-    const transaction = paymobData.obj;
+    // DEBUG: show full payload in Vercel logs so we know the exact shape
+    console.log('📦 Paymob payload:', JSON.stringify(paymobData, null, 2));
+
+    const transaction = paymobData?.obj;
 
     if (!transaction || !transaction.success) {
-      console.log('Webhook received, but transaction was not successful. Skipping.');
+      console.log('❌ Transaction not present or not successful, skipping.');
       return res.status(200).json({ message: 'Transaction not successful.' });
     }
 
+    // Safely read billing fields (may be undefined in some callbacks/test requests)
+    const billing = transaction.billing_data || {};
+    const rawEmail = billing.email || '';
+    const rawPhone = billing.phone_number || billing.mobile || '';
+
+    // Hash user identifiers as FB recommends (sha256, lowercase trimmed)
+    const hashedEmail = rawEmail ? sha256Lower(rawEmail) : null;
+    const normalizedPhone = rawPhone ? normalizePhone(rawPhone) : null;
+    const hashedPhone = normalizedPhone ? sha256Lower(normalizedPhone) : null;
+
+    // Amount & currency
+    const amountCents = transaction.amount_cents || 0;
+    const value = (amountCents / 100).toString();
+    const currency = transaction.currency || 'EGP';
+
     const PIXEL_ID = '1506403623938656';
-    const ACCESS_TOKEN = 'EAAYJ1TdZCSU8BPlqqJ4P42xOABysm8m72kaDZCsip3SI0lyE49hWKc1XwDq63ssbiIOrwGIyrF9lUBZBAqctWZCRCB4zCa2g3j8f9Hrf5njkhhZBxCRrcCvnATz0ZC0d1nfvVwMjmIWoD4BKqgMm4i3LdTYLAZC6ODH2SNdppijiEfNZCKa4O4olqHwnTjFXyQZDZD';
+    const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN || 'EAAYJ1TdZC...'; // better put in env var
     const YOUR_LANDING_PAGE = 'https://www.sportivaacademy.online/sales';
+
+    const user_data = {};
+    if (hashedEmail) user_data.em = [hashedEmail];
+    if (hashedPhone) user_data.ph = [hashedPhone];
 
     const eventData = {
       data: [
@@ -35,23 +69,16 @@ module.exports = async (req, res) => {
           event_time: Math.floor(Date.now() / 1000),
           event_source_url: YOUR_LANDING_PAGE,
           action_source: 'website',
-          // THIS IS THE FIX FOR THE 'email' ERROR
-          user_data: {
-            em: transaction.billing_data ? [transaction.billing_data.email].filter(Boolean) : [],
-            ph: transaction.billing_data ? [transaction.billing_data.phone_number].filter(Boolean) : [],
-          },
+          user_data,
           custom_data: {
-            currency: transaction.currency,
-            value: (transaction.amount_cents / 100).toString(),
+            currency,
+            value,
           },
         },
       ],
     };
 
-    // =================================================================
-    // THIS IS THE FIX FOR THE 'SyntaxError' (backticks   are correct here)
     const FB_API_URL = https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN};
-    // =================================================================
 
     const response = await fetch(FB_API_URL, {
       method: 'POST',
@@ -60,12 +87,11 @@ module.exports = async (req, res) => {
     });
 
     const responseBody = await response.json();
-    console.log('Successfully sent event to Facebook. Response:', responseBody);
+    console.log('✅ Facebook response:', responseBody);
 
-    res.status(200).json({ status: 'success', facebook_response: responseBody });
-
+    return res.status(200).json({ status: 'success', facebook_response: responseBody });
   } catch (error) {
-    console.error('A critical error occurred in the webhook function:', error);
-    res.status(200).json({ status: 'error', message: error.message });
+    console.error('🔥 Webhook error:', error);
+    return res.status(200).json({ status: 'error', message: error.message });
   }
 };
