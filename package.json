@@ -4,6 +4,7 @@
   "main": "api/webhook.js",
   "dependencies": {
     "node-fetch": "^2.6.7",
-    "dotenv": "^16.0.3"
+    "dotenv": "^16.0.3",
+    "axios": "^1.6.8"
   }
 }
