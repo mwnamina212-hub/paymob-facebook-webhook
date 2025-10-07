@@ -1,16 +1,5 @@
-// webhook.js
+require('dotenv').config();
 const fetch = require('node-fetch');
-const crypto = require('crypto');
-
-function sha256Lower(str) {
-  return crypto.createHash('sha256').update(String(str).trim().toLowerCase()).digest('hex');
-}
-
-function normalizePhone(phone) {
-  if (!phone) return '';
-  // Keep digits only (FB recommends removing non-digits)
-  return String(phone).replace(/\D/g, '');
-}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -29,38 +18,21 @@ module.exports = async (req, res) => {
       }
     }
 
-    // DEBUG: show full payload in Vercel logs so we know the exact shape
-    console.log('📦 Paymob payload:', JSON.stringify(paymobData, null, 2));
+    const transaction = paymobData.obj;
 
-    const transaction = paymobData?.obj;
-
+    // ✅ تأكد إن الترانزاكشن ناجح
     if (!transaction || !transaction.success) {
-      console.log('❌ Transaction not present or not successful, skipping.');
+      console.log('Transaction not successful, skipping event.');
       return res.status(200).json({ message: 'Transaction not successful.' });
     }
 
-    // Safely read billing fields (may be undefined in some callbacks/test requests)
-    const billing = transaction.billing_data || {};
-    const rawEmail = billing.email || '';
-    const rawPhone = billing.phone_number || billing.mobile || '';
-
-    // Hash user identifiers as FB recommends (sha256, lowercase trimmed)
-    const hashedEmail = rawEmail ? sha256Lower(rawEmail) : null;
-    const normalizedPhone = rawPhone ? normalizePhone(rawPhone) : null;
-    const hashedPhone = normalizedPhone ? sha256Lower(normalizedPhone) : null;
-
-    // Amount & currency
-    const amountCents = transaction.amount_cents || 0;
-    const value = (amountCents / 100).toString();
-    const currency = transaction.currency || 'EGP';
-
     const PIXEL_ID = '1506403623938656';
-    const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN || 'EAAYJ1TdZC...'; // better put in env var
+    const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
     const YOUR_LANDING_PAGE = 'https://www.sportivaacademy.online/sales';
 
-    const user_data = {};
-    if (hashedEmail) user_data.em = [hashedEmail];
-    if (hashedPhone) user_data.ph = [hashedPhone];
+    // ✅ تأكد من وجود بيانات العميل
+    const email = transaction.billing_data?.email || '';
+    const phone = transaction.billing_data?.phone_number || '';
 
     const eventData = {
       data: [
@@ -69,10 +41,13 @@ module.exports = async (req, res) => {
           event_time: Math.floor(Date.now() / 1000),
           event_source_url: YOUR_LANDING_PAGE,
           action_source: 'website',
-          user_data,
+          user_data: {
+            em: email ? [email] : [],
+            ph: phone ? [phone] : [],
+          },
           custom_data: {
-            currency,
-            value,
+            currency: transaction.currency || 'EGP',
+            value: (transaction.amount_cents / 100).toString(),
           },
         },
       ],
@@ -87,11 +62,12 @@ module.exports = async (req, res) => {
     });
 
     const responseBody = await response.json();
-    console.log('✅ Facebook response:', responseBody);
+    console.log('✅ Successfully sent event to Facebook:', responseBody);
 
-    return res.status(200).json({ status: 'success', facebook_response: responseBody });
+    res.status(200).json({ status: 'success', facebook_response: responseBody });
+
   } catch (error) {
-    console.error('🔥 Webhook error:', error);
-    return res.status(200).json({ status: 'error', message: error.message });
+    console.error('❌ Critical error:', error);
+    res.status(200).json({ status: 'error', message: error.message });
   }
 };
