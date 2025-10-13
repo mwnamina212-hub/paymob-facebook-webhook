@@ -1,4 +1,10 @@
 const fetch = require('node-fetch');
+const crypto = require('crypto'); // <-- الخطوة 1: استدعاء مكتبة التشفير
+
+// دالة مساعدة لعمل التشفير المطلوب
+const hashData = (data) => {
+  return crypto.createHash('sha256').update(data).digest('hex');
+};
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -26,18 +32,14 @@ module.exports = async (req, res) => {
 
     // --- CONFIGURATION ---
     const PIXEL_ID = '1506403623938656';
-    // Securely get the access token from environment variables
     const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN; 
-    
-    // DYNAMICALLY get the landing page URL from Paymob's merchant_order_id
-    // If it's not available, use a default fallback URL
     const landingPageUrl = transaction.merchant_order_id || 'https://www.sportivaacademy.online/sales';
 
-    // --- DATA CLEANING ---
-    const email = transaction.billing_data?.email || '';
-    const phone = transaction.billing_data?.phone_number || '';
-    const firstName = transaction.billing_data?.first_name || '';
-    const lastName = transaction.billing_data?.last_name || '';
+    // --- DATA CLEANING & HASHING --- // <-- الخطوة 2: تعديل هنا
+    const email = transaction.billing_data?.email?.trim().toLowerCase();
+    const phone = transaction.billing_data?.phone_number?.replace(/[^0-9]/g, '');
+    const firstName = transaction.billing_data?.first_name?.trim().toLowerCase();
+    const lastName = transaction.billing_data?.last_name?.trim().toLowerCase();
 
     // --- FACEBOOK EVENT PREPARATION ---
     const eventData = {
@@ -45,13 +47,14 @@ module.exports = async (req, res) => {
         {
           event_name: 'Purchase',
           event_time: Math.floor(Date.now() / 1000),
-          event_source_url: landingPageUrl, // Use the dynamic URL
+          event_source_url: landingPageUrl,
           action_source: 'website',
           user_data: {
-            em: email ? [email.trim().toLowerCase()] : [],
-            ph: phone ? [`+${phone.replace(/[^0-9]/g, '')}`] : [],
-            fn: firstName ? [firstName.trim().toLowerCase()] : [],
-            ln: lastName ? [lastName.trim().toLowerCase()] : [],
+            // التعديل الأهم: استخدام الدالة hashData لتشفير كل حقل
+            em: email ? [hashData(email)] : [],
+            ph: phone ? [hashData(phone)] : [], // لاحظ أننا لم نعد نضيف "+" هنا
+            fn: firstName ? [hashData(firstName)] : [],
+            ln: lastName ? [hashData(lastName)] : [],
           },
           custom_data: {
             currency: transaction.currency,
@@ -61,7 +64,7 @@ module.exports = async (req, res) => {
       ],
     };
 
-    const FB_API_URL = `https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`;
+    const FB_API_URL = https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN};
 
     // --- SEND TO FACEBOOK ---
     const response = await fetch(FB_API_URL, {
@@ -71,12 +74,19 @@ module.exports = async (req, res) => {
     });
 
     const responseBody = await response.json();
-    console.log('Successfully sent event to Facebook. Response:', responseBody);
+    
+    // Check for errors from Facebook API
+    if (response.status >= 400) {
+        console.error('Error sending event to Facebook:', responseBody);
+    } else {
+        console.log('Successfully sent event to Facebook. Response:', responseBody);
+    }
 
     res.status(200).json({ status: 'success', facebook_response: responseBody });
 
   } catch (error) {
     console.error('A critical error occurred in the webhook function:', error);
+    // نرسل 200 دائمًا لبايموب حتى لو حدث خطأ داخلي لمنعهم من إعادة الإرسال
     res.status(200).json({ status: 'error', message: error.message });
   }
 };
