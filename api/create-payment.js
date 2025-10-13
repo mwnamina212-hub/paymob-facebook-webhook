@@ -1,4 +1,4 @@
-// This is the "Bridge" code that connects any landing page to Paymob (Professional Version)
+// Final Corrected Code (Oct 12 Version) - The Growth Partner
 const fetch = require('node-fetch');
 
 // --- MAIN FUNCTION ---
@@ -8,13 +8,12 @@ module.exports = async (req, res) => {
     const {
       price,
       page,
-      email = 'not_provided@example.com', // Default values
+      email = 'not_provided@example.com',
       firstName = 'Guest',
       lastName = 'User',
       phone = '01000000000'
     } = req.query;
 
-    // Basic validation
     if (!price || !page) {
       return res.status(400).json({ message: 'Error: Price and Page URL are required.' });
     }
@@ -32,7 +31,7 @@ module.exports = async (req, res) => {
     if (!paymentKey) throw new Error('Could not get payment key from Paymob.');
 
     // --- 5. Construct the Final Iframe URL ---
-    // THIS IS THE CORRECTED LINE: The URL is now a proper string using backticks ``
+    // THIS IS THE FINAL CORRECTED LINE. IT USES PAYMOB_IFRAME_ID.
     const paymentUrl = https://accept.paymob.com/api/acceptance/iframes/${process.env.PAYMOB_IFRAME_ID}?payment_token=${paymentKey};
 
     // --- 6. Redirect the User to Paymob ---
@@ -41,11 +40,9 @@ module.exports = async (req, res) => {
 
   } catch (error) {
     console.error('A critical error occurred in the create-payment function:', error);
-    // Return a 500 error but also a JSON message for debugging
     res.status(500).json({ status: 'error', message: error.message });
   }
 };
-
 
 // --- HELPER FUNCTIONS ---
 
@@ -68,9 +65,9 @@ async function registerOrder(authToken, amount, landingPage) {
     body: JSON.stringify({
       auth_token: authToken,
       delivery_needed: "false",
-      amount_cents: Number(amount) * 100, // Convert price to cents
+      amount_cents: Number(amount) * 100,
       currency: "EGP",
-      merchant_order_id: landingPage // Use the landing page URL as the ID
+      merchant_order_id: landingPage
     })
   });
   const data = await response.json();
@@ -103,6 +100,7 @@ async function getPaymentKey(authToken, amount, orderId, email, firstName, lastN
         state: "NA"
       },
       currency: "EGP",
+      // THIS IS THE FINAL CORRECTED LINE. IT USES PAYMOB_INTEGRATION_ID.
       integration_id: process.env.PAYMOB_INTEGRATION_ID
     })
   });
