@@ -64,7 +64,7 @@ module.exports = async (req, res) => {
       ],
     };
 
-    const FB_API_URL = https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN};
+    const FB_API_URL = `https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`;
 
     // --- SEND TO FACEBOOK ---
     const response = await fetch(FB_API_URL, {
