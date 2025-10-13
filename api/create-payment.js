@@ -1,41 +1,35 @@
-// Final Corrected Code (Oct 13 - Based on Partner's Insight)
+// Final Code (Oct 13 - Re-inserting default values as per partner's request)
 const fetch = require('node-fetch');
 
 // --- MAIN FUNCTION ---
 module.exports = async (req, res) => {
   try {
-    // --- 1. Extract ONLY Price and Page from the Button Link ---
-    const { price, page } = req.query;
+    // --- THIS BLOCK HAS BEEN RE-INSERTED AS REQUESTED ---
+    const {
+      price,
+      page,
+      email = 'not_provided@example.com', // Default values
+      firstName = 'Guest',
+      lastName = 'User',
+      phone = '01000000000'
+    } = req.query;
 
-    // Basic validation
     if (!price || !page) {
       return res.status(400).json({ message: 'Error: Price and Page URL are required.' });
     }
 
-    // --- 2. Define HARDCODED Test Billing Data (as per partner's correct analysis) ---
-    const testBillingData = {
-      email: 'test@example.com',
-      firstName: 'John',
-      lastName: 'Doe',
-      phone: '01010101010'
-    };
-
-    // --- 3. Authenticate with Paymob ---
     const authToken = await getAuthToken();
     if (!authToken) throw new Error('Could not authenticate with Paymob.');
 
-    // --- 4. Register the Order with Paymob ---
     const orderId = await registerOrder(authToken, price, page);
     if (!orderId) throw new Error('Could not register order with Paymob.');
 
-    // --- 5. Get the Payment Key from Paymob (using the hardcoded test data) ---
-    const paymentKey = await getPaymentKey(authToken, price, orderId, testBillingData);
+    // The function will now use the values from the block above
+    const paymentKey = await getPaymentKey(authToken, price, orderId, { email, firstName, lastName, phone });
     if (!paymentKey) throw new Error('Could not get payment key from Paymob.');
 
-    // --- 6. Construct the Final Iframe URL ---
     const paymentUrl = `https://accept.paymob.com/api/acceptance/iframes/${process.env.PAYMOB_IFRAME_ID}?payment_token=${paymentKey}`;
 
-    // --- 7. Redirect the User to Paymob ---
     res.writeHead(302, { Location: paymentUrl });
     res.end();
 
@@ -45,8 +39,7 @@ module.exports = async (req, res) => {
   }
 };
 
-
-// --- HELPER FUNCTIONS (Updated to accept billing object) ---
+// --- HELPER FUNCTIONS (Unchanged, but will receive the default values) ---
 
 async function getAuthToken() {
   const response = await fetch('https://accept.paymob.com/api/auth/tokens', {
@@ -67,6 +60,8 @@ async function registerOrder(authToken, amount, landingPage) {
       delivery_needed: "false",
       amount_cents: Number(amount) * 100,
       currency: "EGP",
+      merchant_id: process.env.PAYMOB_MERCHANT_ID,
+      items: [],
       merchant_order_id: landingPage
     })
   });
@@ -74,7 +69,6 @@ async function registerOrder(authToken, amount, landingPage) {
   return data.id;
 }
 
-// Updated to take a single billingData object
 async function getPaymentKey(authToken, amount, orderId, billingData) {
   const response = await fetch('https://accept.paymob.com/api/acceptance/payment_keys', {
     method: 'POST',
