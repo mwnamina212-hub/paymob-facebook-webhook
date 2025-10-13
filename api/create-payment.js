@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
 
     // --- 5. Construct the Final Iframe URL ---
     // THIS IS THE FINAL CORRECTED LINE. IT USES PAYMOB_IFRAME_ID.
-    const paymentUrl = https://accept.paymob.com/api/acceptance/iframes/${process.env.PAYMOB_IFRAME_ID}?payment_token=${paymentKey};
+    const paymentUrl = `https://accept.paymob.com/api/acceptance/iframes/${process.env.PAYMOB_IFRAME_ID}?payment_token=${paymentKey}`;
 
     // --- 6. Redirect the User to Paymob ---
     res.writeHead(302, { Location: paymentUrl });
