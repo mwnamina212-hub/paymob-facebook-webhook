@@ -1,40 +1,41 @@
-// Final Corrected Code (Oct 12 Version) - The Growth Partner
+// Final Corrected Code (Oct 13 - Based on Partner's Insight)
 const fetch = require('node-fetch');
 
 // --- MAIN FUNCTION ---
 module.exports = async (req, res) => {
   try {
-    // --- 1. Extract Data from the Button Link ---
-    const {
-      price,
-      page,
-      email = 'not_provided@example.com',
-      firstName = 'Guest',
-      lastName = 'User',
-      phone = '01000000000'
-    } = req.query;
+    // --- 1. Extract ONLY Price and Page from the Button Link ---
+    const { price, page } = req.query;
 
+    // Basic validation
     if (!price || !page) {
       return res.status(400).json({ message: 'Error: Price and Page URL are required.' });
     }
 
-    // --- 2. Authenticate with Paymob ---
+    // --- 2. Define HARDCODED Test Billing Data (as per partner's correct analysis) ---
+    const testBillingData = {
+      email: 'test@example.com',
+      firstName: 'John',
+      lastName: 'Doe',
+      phone: '01010101010'
+    };
+
+    // --- 3. Authenticate with Paymob ---
     const authToken = await getAuthToken();
     if (!authToken) throw new Error('Could not authenticate with Paymob.');
 
-    // --- 3. Register the Order with Paymob ---
+    // --- 4. Register the Order with Paymob ---
     const orderId = await registerOrder(authToken, price, page);
     if (!orderId) throw new Error('Could not register order with Paymob.');
 
-    // --- 4. Get the Payment Key from Paymob ---
-    const paymentKey = await getPaymentKey(authToken, price, orderId, email, firstName, lastName, phone);
+    // --- 5. Get the Payment Key from Paymob (using the hardcoded test data) ---
+    const paymentKey = await getPaymentKey(authToken, price, orderId, testBillingData);
     if (!paymentKey) throw new Error('Could not get payment key from Paymob.');
 
-    // --- 5. Construct the Final Iframe URL ---
-    // THIS IS THE FINAL CORRECTED LINE. IT USES PAYMOB_IFRAME_ID.
+    // --- 6. Construct the Final Iframe URL ---
     const paymentUrl = `https://accept.paymob.com/api/acceptance/iframes/${process.env.PAYMOB_IFRAME_ID}?payment_token=${paymentKey}`;
 
-    // --- 6. Redirect the User to Paymob ---
+    // --- 7. Redirect the User to Paymob ---
     res.writeHead(302, { Location: paymentUrl });
     res.end();
 
@@ -44,9 +45,9 @@ module.exports = async (req, res) => {
   }
 };
 
-// --- HELPER FUNCTIONS ---
 
-// Step 1: Authenticate
+// --- HELPER FUNCTIONS (Updated to accept billing object) ---
+
 async function getAuthToken() {
   const response = await fetch('https://accept.paymob.com/api/auth/tokens', {
     method: 'POST',
@@ -57,7 +58,6 @@ async function getAuthToken() {
   return data.token;
 }
 
-// Step 2: Register the order
 async function registerOrder(authToken, amount, landingPage) {
   const response = await fetch('https://accept.paymob.com/api/ecommerce/orders', {
     method: 'POST',
@@ -74,8 +74,8 @@ async function registerOrder(authToken, amount, landingPage) {
   return data.id;
 }
 
-// Step 3: Get the payment key
-async function getPaymentKey(authToken, amount, orderId, email, firstName, lastName, phone) {
+// Updated to take a single billingData object
+async function getPaymentKey(authToken, amount, orderId, billingData) {
   const response = await fetch('https://accept.paymob.com/api/acceptance/payment_keys', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -85,22 +85,15 @@ async function getPaymentKey(authToken, amount, orderId, email, firstName, lastN
       expiration: 3600,
       order_id: orderId,
       billing_data: {
-        email: email,
-        first_name: firstName,
-        last_name: lastName,
-        phone_number: phone,
-        apartment: "NA",
-        floor: "NA",
-        street: "NA",
-        building: "NA",
-        shipping_method: "NA",
-        postal_code: "NA",
-        city: "NA",
-        country: "NA",
-        state: "NA"
+        email: billingData.email,
+        first_name: billingData.firstName,
+        last_name: billingData.lastName,
+        phone_number: billingData.phone,
+        apartment: "NA", floor: "NA", street: "NA", building: "NA",
+        shipping_method: "NA", postal_code: "NA", city: "NA",
+        country: "NA", state: "NA"
       },
       currency: "EGP",
-      // THIS IS THE FINAL CORRECTED LINE. IT USES PAYMOB_INTEGRATION_ID.
       integration_id: process.env.PAYMOB_INTEGRATION_ID
     })
   });
