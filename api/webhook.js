@@ -1,8 +1,9 @@
 const fetch = require('node-fetch');
-const crypto = require('crypto'); // <-- الخطوة 1: استدعاء مكتبة التشفير
+const crypto = require('crypto');
 
-// دالة مساعدة لعمل التشفير المطلوب
+// دالة مساعدة لعمل التشفير
 const hashData = (data) => {
+  if (!data) return null; // لا تقم بتشفير قيمة فارغة
   return crypto.createHash('sha256').update(data).digest('hex');
 };
 
@@ -13,6 +14,9 @@ module.exports = async (req, res) => {
 
   try {
     let paymobData = req.body;
+
+    // --- خطوة التشخيص: طباعة البيانات القادمة من بايموب ---
+    console.log('RAW PAYMOB WEBHOOK BODY:', JSON.stringify(paymobData, null, 2));
 
     if (typeof paymobData === 'string') {
       try {
@@ -32,36 +36,52 @@ module.exports = async (req, res) => {
 
     // --- CONFIGURATION ---
     const PIXEL_ID = '1506403623938656';
-    const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN; 
+    const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
     const landingPageUrl = transaction.merchant_order_id || 'https://www.sportivaacademy.online/sales';
 
-    // --- DATA CLEANING & HASHING --- // <-- الخطوة 2: تعديل هنا
+    // --- DATA CLEANING & HASHING ---
     const email = transaction.billing_data?.email?.trim().toLowerCase();
     const phone = transaction.billing_data?.phone_number?.replace(/[^0-9]/g, '');
     const firstName = transaction.billing_data?.first_name?.trim().toLowerCase();
     const lastName = transaction.billing_data?.last_name?.trim().toLowerCase();
 
+    // --- خطوة التشخيص: طباعة البيانات بعد تنظيفها ---
+    console.log('CLEANED DATA:', { email, phone, firstName, lastName });
+
+    const hashedEmail = hashData(email);
+    const hashedPhone = hashData(phone);
+    const hashedFirstName = hashData(firstName);
+    const hashedLastName = hashData(lastName);
+
+    // --- خطوة التشخيص: طباعة البيانات المشفرة ---
+    console.log('HASHED DATA:', { hashedEmail, hashedPhone, hashedFirstName, hashedLastName });
+
     // --- FACEBOOK EVENT PREPARATION ---
+    const userData = {};
+    if (hashedEmail) userData.em = [hashedEmail];
+    if (hashedPhone) userData.ph = [hashedPhone];
+    if (hashedFirstName) userData.fn = [hashedFirstName];
+    if (hashedLastName) userData.ln = [hashedLastName];
+
+    // التأكد من وجود بيانات مستخدم واحدة على الأقل قبل إرسال الكائن
+    if (Object.keys(userData).length === 0) {
+      console.error('No user data available to send to Facebook. Skipping event.');
+      // نرسل رد نجاح لبايموب لمنع إعادة الإرسال
+      return res.status(200).json({ status: 'skipped', message: 'No user data to send.' });
+    }
+
     const eventData = {
-      data: [
-        {
-          event_name: 'Purchase',
-          event_time: Math.floor(Date.now() / 1000),
-          event_source_url: landingPageUrl,
-          action_source: 'website',
-          user_data: {
-            // التعديل الأهم: استخدام الدالة hashData لتشفير كل حقل
-            em: email ? [hashData(email)] : [],
-            ph: phone ? [hashData(phone)] : [], // لاحظ أننا لم نعد نضيف "+" هنا
-            fn: firstName ? [hashData(firstName)] : [],
-            ln: lastName ? [hashData(lastName)] : [],
-          },
-          custom_data: {
-            currency: transaction.currency,
-            value: (transaction.amount_cents / 100).toString(),
-          },
+      data: [{
+        event_name: 'Purchase',
+        event_time: Math.floor(Date.now() / 1000),
+        event_source_url: landingPageUrl,
+        action_source: 'website',
+        user_data: userData,
+        custom_data: {
+          currency: transaction.currency,
+          value: (transaction.amount_cents / 100).toString(),
         },
-      ],
+      }],
     };
 
     const FB_API_URL = `https://graph.facebook.com/v19.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`;
@@ -74,19 +94,17 @@ module.exports = async (req, res) => {
     });
 
     const responseBody = await response.json();
-    
-    // Check for errors from Facebook API
+
     if (response.status >= 400) {
-        console.error('Error sending event to Facebook:', responseBody);
+      console.error('Error sending event to Facebook:', responseBody);
     } else {
-        console.log('Successfully sent event to Facebook. Response:', responseBody);
+      console.log('Successfully sent event to Facebook. Response:', responseBody);
     }
 
     res.status(200).json({ status: 'success', facebook_response: responseBody });
 
   } catch (error) {
     console.error('A critical error occurred in the webhook function:', error);
-    // نرسل 200 دائمًا لبايموب حتى لو حدث خطأ داخلي لمنعهم من إعادة الإرسال
     res.status(200).json({ status: 'error', message: error.message });
   }
 };
