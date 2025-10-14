@@ -3,7 +3,7 @@ const crypto = require('crypto');
 
 // دالة مساعدة لعمل التشفير
 const hashData = (data) => {
-  if (!data) return null; // لا تقم بتشفير قيمة فارغة
+  if (!data) return null;
   return crypto.createHash('sha256').update(data).digest('hex');
 };
 
@@ -14,9 +14,6 @@ module.exports = async (req, res) => {
 
   try {
     let paymobData = req.body;
-
-    // --- خطوة التشخيص: طباعة البيانات القادمة من بايموب ---
-    console.log('RAW PAYMOB WEBHOOK BODY:', JSON.stringify(paymobData, null, 2));
 
     if (typeof paymobData === 'string') {
       try {
@@ -39,22 +36,17 @@ module.exports = async (req, res) => {
     const ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
     const landingPageUrl = transaction.merchant_order_id || 'https://www.sportivaacademy.online/sales';
 
-    // --- DATA CLEANING & HASHING ---
-    const email = transaction.billing_data?.email?.trim().toLowerCase();
-    const phone = transaction.billing_data?.phone_number?.replace(/[^0-9]/g, '');
-    const firstName = transaction.billing_data?.first_name?.trim().toLowerCase();
-    const lastName = transaction.billing_data?.last_name?.trim().toLowerCase();
-
-    // --- خطوة التشخيص: طباعة البيانات بعد تنظيفها ---
-    console.log('CLEANED DATA:', { email, phone, firstName, lastName });
+    // --- DATA CLEANING & HASHING (تم تصحيح المسار) ---
+    // نقرأ الآن من transaction.order.shipping_data
+    const email = transaction.order?.shipping_data?.email?.trim().toLowerCase();
+    const phone = transaction.order?.shipping_data?.phone_number?.replace(/[^0-9]/g, '');
+    const firstName = transaction.order?.shipping_data?.first_name?.trim().toLowerCase();
+    const lastName = transaction.order?.shipping_data?.last_name?.trim().toLowerCase();
 
     const hashedEmail = hashData(email);
     const hashedPhone = hashData(phone);
     const hashedFirstName = hashData(firstName);
     const hashedLastName = hashData(lastName);
-
-    // --- خطوة التشخيص: طباعة البيانات المشفرة ---
-    console.log('HASHED DATA:', { hashedEmail, hashedPhone, hashedFirstName, hashedLastName });
 
     // --- FACEBOOK EVENT PREPARATION ---
     const userData = {};
@@ -63,10 +55,8 @@ module.exports = async (req, res) => {
     if (hashedFirstName) userData.fn = [hashedFirstName];
     if (hashedLastName) userData.ln = [hashedLastName];
 
-    // التأكد من وجود بيانات مستخدم واحدة على الأقل قبل إرسال الكائن
     if (Object.keys(userData).length === 0) {
-      console.error('No user data available to send to Facebook. Skipping event.');
-      // نرسل رد نجاح لبايموب لمنع إعادة الإرسال
+      console.error('No valid user data found in shipping_data. Skipping event.');
       return res.status(200).json({ status: 'skipped', message: 'No user data to send.' });
     }
 
