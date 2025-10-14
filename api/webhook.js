@@ -15,6 +15,9 @@ module.exports = async (req, res) => {
   try {
     let paymobData = req.body;
 
+    // <-- السطر المضاف
+    console.log('RAW PAYMOB WEBHOOK BODY:', JSON.stringify(paymobData, null, 2));
+
     if (typeof paymobData === 'string') {
       try {
         paymobData = JSON.parse(paymobData);
@@ -37,7 +40,6 @@ module.exports = async (req, res) => {
     const landingPageUrl = transaction.merchant_order_id || 'https://www.sportivaacademy.online/sales';
 
     // --- DATA CLEANING & HASHING (تم تصحيح المسار) ---
-    // نقرأ الآن من transaction.order.shipping_data
     const email = transaction.order?.shipping_data?.email?.trim().toLowerCase();
     const phone = transaction.order?.shipping_data?.phone_number?.replace(/[^0-9]/g, '');
     const firstName = transaction.order?.shipping_data?.first_name?.trim().toLowerCase();
